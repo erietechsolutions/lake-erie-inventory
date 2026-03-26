@@ -238,9 +238,9 @@ public class SetupWizard extends Stage {
     }
 
     private VBox buildFooter() {
-        VBox footer = new VBox(10);
+        VBox footer = new VBox(6);
         footer.getStyleClass().add("wizard-footer");
-        footer.setPadding(new Insets(14, 32, 22, 32));
+        footer.setPadding(new Insets(14, 32, 18, 32));
 
         // Dot indicators - one per page
         dotIndicator.setAlignment(Pos.CENTER);
@@ -267,7 +267,12 @@ public class SetupWizard extends Stage {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         navRow.getChildren().addAll(dotIndicator, spacer, btnBack, btnNext);
 
-        footer.getChildren().addAll(errorLabel, navRow);
+        Label copyright = new Label(App.COPYRIGHT);
+        copyright.getStyleClass().add("copyright-label");
+        copyright.setMaxWidth(Double.MAX_VALUE);
+        copyright.setAlignment(Pos.CENTER);
+
+        footer.getChildren().addAll(errorLabel, navRow, copyright);
         return footer;
     }
 

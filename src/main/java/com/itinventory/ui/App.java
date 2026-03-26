@@ -11,8 +11,9 @@ import java.io.IOException;
 
 public class App extends Application {
 
-    public static final String DATA_DIR  = "data";
-    public static final String APP_NAME  = "Lake Erie Inventory";
+    public static final String DATA_DIR   = "data";
+    public static final String APP_NAME   = "Lake Erie Inventory";
+    public static final String COPYRIGHT  = "\u00A9 Lake Erie Technical Solutions LLC  \u2014  All Rights Reserved 2026";
 
     private static InventoryService service;
 

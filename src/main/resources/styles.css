@@ -612,3 +612,13 @@
 .update-spinner {
     -fx-accent: -color-accent;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Copyright Notice
+   ═══════════════════════════════════════════════════════════════ */
+.copyright-label {
+    -fx-text-fill: derive(-color-muted, -20%);
+    -fx-font-size: 10px;
+    -fx-font-style: italic;
+    -fx-padding: 2 0 0 0;
+}

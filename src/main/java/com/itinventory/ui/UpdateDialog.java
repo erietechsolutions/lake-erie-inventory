@@ -77,11 +77,10 @@ public class UpdateDialog extends Stage {
 
     // ── Footer ────────────────────────────────────────────────────────────────
 
-    private HBox buildFooter() {
+    private VBox buildFooter() {
         HBox bar = new HBox();
-        bar.getStyleClass().add("wizard-footer");
         bar.setAlignment(Pos.CENTER_RIGHT);
-        bar.setPadding(new Insets(12, 28, 16, 28));
+        bar.setPadding(new Insets(12, 28, 8, 28));
 
         Button btnClose = new Button("Close");
         btnClose.getStyleClass().add("btn-secondary");
@@ -91,7 +90,16 @@ public class UpdateDialog extends Stage {
         });
 
         bar.getChildren().add(btnClose);
-        return bar;
+
+        Label copyright = new Label(App.COPYRIGHT);
+        copyright.getStyleClass().add("copyright-label");
+        copyright.setMaxWidth(Double.MAX_VALUE);
+        copyright.setAlignment(Pos.CENTER);
+        copyright.setPadding(new Insets(0, 28, 10, 28));
+
+        VBox footer = new VBox(0, bar, copyright);
+        footer.getStyleClass().add("wizard-footer");
+        return footer;
     }
 
     // ── Content states ────────────────────────────────────────────────────────
