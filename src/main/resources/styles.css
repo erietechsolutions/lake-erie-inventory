@@ -622,3 +622,23 @@
     -fx-font-style: italic;
     -fx-padding: 2 0 0 0;
 }
+
+/* ── Auto-updater progress bar ──────────────────────────────── */
+.update-progress-bar {
+    -fx-accent: -color-accent;
+    -fx-background-color: -color-border;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+}
+
+.update-progress-bar .bar {
+    -fx-background-color: -color-accent;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+}
+
+.update-progress-bar .track {
+    -fx-background-color: -color-border;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+}
