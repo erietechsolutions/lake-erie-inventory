@@ -67,8 +67,21 @@ public class OrgBanner extends HBox {
         btnSettings.getStyleClass().add("btn-secondary");
         btnSettings.setOnAction(e -> onSettings.run());
 
-        getChildren().addAll(strip, gap(14), nameBlock, div1, adminBlock,
-                spacer, lblUpdateBadge, gap(10), btnUpdates, gap(8), btnSettings);
+        // Shared path indicator
+        if (config.isUsingSharedPath()) {
+            Label sharedLabel = new Label("  Shared: " + config.getDataPath());
+            sharedLabel.getStyleClass().add("org-banner-shared");
+            HBox.setMargin(sharedLabel, new Insets(0, 14, 0, 0));
+            getChildren().addAll(strip, gap(14), nameBlock, div1, adminBlock,
+                    divider(), new VBox(2,
+                        new Label("DATA") {{ getStyleClass().add("org-banner-heading"); }},
+                        sharedLabel
+                    ),
+                    spacer, lblUpdateBadge, gap(10), btnUpdates, gap(8), btnSettings);
+        } else {
+            getChildren().addAll(strip, gap(14), nameBlock, div1, adminBlock,
+                    spacer, lblUpdateBadge, gap(10), btnUpdates, gap(8), btnSettings);
+        }
 
         refresh(config);
     }

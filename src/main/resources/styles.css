@@ -676,3 +676,10 @@
     -fx-border-radius: 12;
     -fx-background-radius: 12;
 }
+
+/* ── Shared path indicator in banner ────────────────────────── */
+.org-banner-shared {
+    -fx-text-fill: #3ecf8e;
+    -fx-font-size: 11px;
+    -fx-font-style: italic;
+}

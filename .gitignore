@@ -1,0 +1,38 @@
+# Compiled output
+out/
+
+# Runtime data (never commit)
+data/inventory.csv
+data/users.csv
+data/org.properties
+data/org.local.properties
+data/inventory.lock
+data/change_log.csv
+data/custom_fields.properties
+data/backups/
+
+# Update system temp folders
+update_temp/
+update_backup/
+
+# Compiler error log
+compile_error.txt
+
+# Java compiled class files
+*.class
+
+# Windows system files
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+
+# IntelliJ / IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# macOS
+.DS_Store

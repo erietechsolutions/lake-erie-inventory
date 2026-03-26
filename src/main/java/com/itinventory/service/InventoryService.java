@@ -119,13 +119,29 @@ public class InventoryService {
 
     public List<Asset> filterByCategory(Category category) {
         return assets.values().stream()
-                .filter(a -> category.equals(a.getCategory()))
+                .filter(a -> category != null &&
+                             category.name().equalsIgnoreCase(a.getCategoryStr()))
+                .collect(Collectors.toList());
+    }
+
+    public List<Asset> filterByCategoryStr(String category) {
+        if (category == null || category.isBlank()) return new ArrayList<>(assets.values());
+        return assets.values().stream()
+                .filter(a -> category.equalsIgnoreCase(a.getCategoryStr()))
                 .collect(Collectors.toList());
     }
 
     public List<Asset> filterByStatus(Status status) {
         return assets.values().stream()
-                .filter(a -> status.equals(a.getStatus()))
+                .filter(a -> status != null &&
+                             status.name().equalsIgnoreCase(a.getStatusStr()))
+                .collect(Collectors.toList());
+    }
+
+    public List<Asset> filterByStatusStr(String status) {
+        if (status == null || status.isBlank()) return new ArrayList<>(assets.values());
+        return assets.values().stream()
+                .filter(a -> status.equalsIgnoreCase(a.getStatusStr()))
                 .collect(Collectors.toList());
     }
 
@@ -176,6 +192,19 @@ public class InventoryService {
 
     public int getTotalCount() { return assets.size(); }
 
+    public Map<String, Long> countByCategoryStr() {
+        return assets.values().stream()
+                .filter(a -> a.getCategoryStr() != null && !a.getCategoryStr().isBlank())
+                .collect(Collectors.groupingBy(Asset::getCategoryStr, Collectors.counting()));
+    }
+
+    public Map<String, Long> countByStatusStr() {
+        return assets.values().stream()
+                .filter(a -> a.getStatusStr() != null && !a.getStatusStr().isBlank())
+                .collect(Collectors.groupingBy(Asset::getStatusStr, Collectors.counting()));
+    }
+
+    // Legacy enum-based methods kept for backwards compat
     public Map<Category, Long> countByCategory() {
         return assets.values().stream()
                 .filter(a -> a.getCategory() != null)

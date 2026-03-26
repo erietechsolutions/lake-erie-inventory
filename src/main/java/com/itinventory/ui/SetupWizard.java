@@ -518,9 +518,9 @@ public class SetupWizard extends Stage {
                     errorLabel.setVisible(true);
                     return;
                 }
-                // Save license acceptance
+                // Save license acceptance — local only
                 config.setLicenseAccepted(true);
-                try { config.save(); }
+                try { config.saveLocal(); }
                 catch (IOException e) {
                     errorLabel.setText("Could not save acceptance: " + e.getMessage());
                     errorLabel.setVisible(true);
@@ -543,7 +543,7 @@ public class SetupWizard extends Stage {
             if (currentPage == 4) {
                 try {
                     config.markConfigured();
-                    config.save();
+                    config.saveShared(); // org details go to shared config
                     completed = true;
                     close();
                 } catch (IOException e) {

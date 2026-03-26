@@ -1,8 +1,10 @@
 package com.itinventory.ui;
 
 import com.itinventory.model.Asset;
-import com.itinventory.model.Asset.Category;
-import com.itinventory.model.Asset.Status;
+import com.itinventory.service.InventoryService;
+import com.itinventory.util.ChangeLogger;
+import com.itinventory.util.ChangeLogger.Action;
+import com.itinventory.util.CustomFieldsManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -11,48 +13,49 @@ import javafx.stage.Stage;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import com.itinventory.service.InventoryService;
-
 
 /**
  * Modal dialog for adding or editing an asset.
- * Pass {@code existing = null} for an add, or an Asset instance for an edit.
+ * Category and Status dropdowns are populated from CustomFieldsManager
+ * so they include both built-in and custom values.
  */
 public class AssetDialog extends Dialog<Asset> {
 
     private final Label tagWarning = new Label();
-
     private final boolean isEdit;
 
     // Form fields
-    private final TextField       tfName         = field();
-    private final ComboBox<Category> cbCategory  = new ComboBox<>();
-    private final TextField       tfManufacturer = field();
-    private final TextField       tfModel        = field();
-    private final TextField       tfSerial       = field();
-    private final TextField tfAssetTag = field("e.g. 0000");
-    private final ComboBox<Status> cbStatus      = new ComboBox<>();
-    private final TextField       tfAssignedTo   = field();
-    private final TextField       tfLocation     = field();
-    private final TextField       tfPurchaseDate = field("YYYY-MM-DD");
-    private final TextField       tfPrice        = field("0.00");
-    private final TextField       tfWarranty     = field("YYYY-MM-DD");
-    private final TextArea        taNotes        = new TextArea();
+    private final TextField        tfName         = field();
+    private final ComboBox<String> cbCategory     = new ComboBox<>();
+    private final TextField        tfManufacturer = field();
+    private final TextField        tfModel        = field();
+    private final TextField        tfSerial       = field();
+    private final TextField        tfAssetTag     = field("e.g. 0000");
+    private final ComboBox<String> cbStatus       = new ComboBox<>();
+    private final TextField        tfAssignedTo   = field();
+    private final TextField        tfLocation     = field();
+    private final TextField        tfPurchaseDate = field("YYYY-MM-DD");
+    private final TextField        tfPrice        = field("0.00");
+    private final TextField        tfWarranty     = field("YYYY-MM-DD");
+    private final TextArea         taNotes        = new TextArea();
 
-    public AssetDialog(Stage owner, Asset existing, InventoryService service) {
+    public AssetDialog(Stage owner, Asset existing,
+                       InventoryService service,
+                       CustomFieldsManager cfm,
+                       ChangeLogger logger) {
         this.isEdit = (existing != null);
         String existingId = existing != null ? existing.getAssetId() : "";
 
-        setTitle(isEdit ? "Edit Asset – " + existing.getAssetId() : "Add New Asset");
+        setTitle(isEdit ? "Edit Asset - " + existing.getAssetId() : "Add New Asset");
         initOwner(owner);
         getDialogPane().getStylesheets().add(
                 getClass().getResource("/styles.css").toExternalForm());
         getDialogPane().getStyleClass().add("dialog-pane");
 
-        // Enum combos
-        cbCategory.getItems().addAll(Category.values());
+        // Populate dropdowns from CustomFieldsManager (built-ins + custom)
+        cbCategory.getItems().addAll(cfm.getActiveCategories());
         cbCategory.setMaxWidth(Double.MAX_VALUE);
-        cbStatus.getItems().addAll(Status.values());
+        cbStatus.getItems().addAll(cfm.getActiveStatuses());
         cbStatus.setMaxWidth(Double.MAX_VALUE);
 
         // Notes area
@@ -61,40 +64,36 @@ public class AssetDialog extends Dialog<Asset> {
 
         // Populate for edit
         if (isEdit) populate(existing);
-        else        cbStatus.setValue(Status.ACTIVE);
+        else        cbStatus.setValue("ACTIVE");
 
         // Layout
         getDialogPane().setContent(buildForm());
-        getDialogPane().setPrefWidth(540);
+        getDialogPane().setPrefWidth(560);
 
         // Buttons
-        ButtonType saveBtn = new ButtonType(isEdit ? "Save Changes" : "Add Asset", ButtonBar.ButtonData.OK_DONE);
+        ButtonType saveBtn = new ButtonType(
+            isEdit ? "Save Changes" : "Add Asset",
+            ButtonBar.ButtonData.OK_DONE);
         getDialogPane().getButtonTypes().addAll(saveBtn, ButtonType.CANCEL);
-
-        // Style the OK button
-        Button okButton = (Button) getDialogPane().lookupButton(saveBtn);
-        okButton.getStyleClass().add("btn-primary");
+        ((Button) getDialogPane().lookupButton(saveBtn))
+                .getStyleClass().add("btn-primary");
 
         // Result converter
         setResultConverter(btnType -> {
             if (btnType == saveBtn) return buildAsset(isEdit ? existing : null);
             return null;
-        
-});
+        });
 
+        // Live duplicate-tag warning
         tfAssetTag.textProperty().addListener((obs, oldVal, newVal) -> {
-    String tag = newVal.trim();
-    if (tag.isBlank()) { tagWarning.setVisible(false); return; }
-    boolean taken = service.findByTag(tag)
-            .filter(a -> !a.getAssetId().equals(existingId))
-            .isPresent();
-    tagWarning.setText("⚠  Tag '" + tag.toUpperCase() + "' is already in use");
-    tagWarning.setVisible(taken);
-});
-
-
-
-        
+            String tag = newVal.trim();
+            if (tag.isBlank()) { tagWarning.setVisible(false); return; }
+            boolean taken = service.findByTag(tag)
+                    .filter(a -> !a.getAssetId().equals(existingId))
+                    .isPresent();
+            tagWarning.setText("Tag '" + tag.toUpperCase() + "' is already in use");
+            tagWarning.setVisible(taken);
+        });
     }
 
     // ── Form layout ───────────────────────────────────────────────────────────
@@ -106,80 +105,76 @@ public class AssetDialog extends Dialog<Asset> {
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 24, 10, 24));
 
-        ColumnConstraints labelCol = new ColumnConstraints(110);
-        ColumnConstraints fieldCol = new ColumnConstraints();
-        fieldCol.setHgrow(Priority.ALWAYS);
-        ColumnConstraints labelCol2 = new ColumnConstraints(110);
-        ColumnConstraints fieldCol2 = new ColumnConstraints();
-        fieldCol2.setHgrow(Priority.ALWAYS);
-        grid.getColumnConstraints().addAll(labelCol, fieldCol, labelCol2, fieldCol2);
+        ColumnConstraints lc1 = new ColumnConstraints(110);
+        ColumnConstraints fc1 = new ColumnConstraints();
+        fc1.setHgrow(Priority.ALWAYS);
+        ColumnConstraints lc2 = new ColumnConstraints(110);
+        ColumnConstraints fc2 = new ColumnConstraints();
+        fc2.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().addAll(lc1, fc1, lc2, fc2);
 
         int row = 0;
 
-        // Row 0 – name (spans 3 cols)
-        grid.add(label("Name *"),    0, row);
+        // Name
+        grid.add(label("Name *"), 0, row);
         GridPane.setColumnSpan(tfName, 3);
-        grid.add(tfName,             1, row++);
+        grid.add(tfName, 1, row++);
 
-        // Row 1 – asset tag | warning label (right side, same row)
-        grid.add(label("Asset Tag"),  0, row);
-        grid.add(tfAssetTag,          1, row);
-
+        // Asset Tag | warning
+        grid.add(label("Asset Tag"), 0, row);
+        grid.add(tfAssetTag, 1, row);
         tagWarning.getStyleClass().add("tag-warning");
         tagWarning.setVisible(false);
         tagWarning.setWrapText(true);
         GridPane.setColumnSpan(tagWarning, 2);
         grid.add(tagWarning, 2, row++);
 
-        // Row 2 – serial number (own row now that warning shares row 1)
+        // Serial No
         grid.add(label("Serial No."), 0, row);
         GridPane.setColumnSpan(tfSerial, 3);
-        grid.add(tfSerial,            1, row++);
+        grid.add(tfSerial, 1, row++);
 
-        
-        
+        // Category | Manufacturer
+        grid.add(label("Category *"), 0, row);
+        grid.add(cbCategory, 1, row);
+        grid.add(label("Manufacturer"), 2, row);
+        grid.add(tfManufacturer, 3, row++);
 
-        // Row 2 – category | manufacturer
-        grid.add(label("Category *"),    0, row);
-        grid.add(cbCategory,             1, row);
-        grid.add(label("Manufacturer"),  2, row);
-        grid.add(tfManufacturer,         3, row++);
+        // Model | (empty)
+        grid.add(label("Model"), 0, row);
+        GridPane.setColumnSpan(tfModel, 3);
+        grid.add(tfModel, 1, row++);
 
-        // Row 3 – model | serial
-        grid.add(label("Model"),     0, row);
-        grid.add(tfModel,            1, row);
-
-        // Row 4 – status | assignee
-        grid.add(label("Status *"),  0, row);
-        grid.add(cbStatus,           1, row);
+        // Status | Assigned To
+        grid.add(label("Status *"), 0, row);
+        grid.add(cbStatus, 1, row);
         grid.add(label("Assigned To"), 2, row);
-        grid.add(tfAssignedTo,       3, row++);
+        grid.add(tfAssignedTo, 3, row++);
 
-        // Row 5 – location | price
-        grid.add(label("Location"),  0, row);
-        grid.add(tfLocation,         1, row);
+        // Location | Price
+        grid.add(label("Location"), 0, row);
+        grid.add(tfLocation, 1, row);
         grid.add(label("Price ($)"), 2, row);
-        grid.add(tfPrice,            3, row++);
+        grid.add(tfPrice, 3, row++);
 
-        // Row 6 – purchase date | warranty
+        // Purchase Date | Warranty
         grid.add(label("Purchase Date"), 0, row);
-        grid.add(tfPurchaseDate,         1, row);
+        grid.add(tfPurchaseDate, 1, row);
         grid.add(label("Warranty Exp."), 2, row);
-        grid.add(tfWarranty,             3, row++);
+        grid.add(tfWarranty, 3, row++);
 
-        // Row 7 – notes (full width)
-        grid.add(label("Notes"),     0, row);
+        // Notes
+        grid.add(label("Notes"), 0, row);
         GridPane.setColumnSpan(taNotes, 3);
-        grid.add(taNotes,            1, row++);
+        grid.add(taNotes, 1, row++);
 
-        // Make text fields fill width
+        // Make fields fill width
         for (var node : grid.getChildren()) {
             if (node instanceof TextField tf) {
                 tf.setMaxWidth(Double.MAX_VALUE);
                 GridPane.setHgrow(tf, Priority.ALWAYS);
             }
         }
-
         return grid;
     }
 
@@ -187,29 +182,32 @@ public class AssetDialog extends Dialog<Asset> {
 
     private void populate(Asset a) {
         tfName.setText(a.getName());
-        cbCategory.setValue(a.getCategory());
+        cbCategory.setValue(a.getCategoryStr());
         tfManufacturer.setText(a.getManufacturer());
         tfModel.setText(a.getModel());
         tfSerial.setText(a.getSerialNumber());
         tfAssetTag.setText(a.getAssetTag() != null ? a.getAssetTag() : "");
-        cbStatus.setValue(a.getStatus());
+        cbStatus.setValue(a.getStatusStr());
         tfAssignedTo.setText(a.getAssignedTo());
         tfLocation.setText(a.getLocation());
-        tfPurchaseDate.setText(a.getPurchaseDate()   != null ? a.getPurchaseDate().toString()   : "");
-        tfPrice.setText(a.getPurchasePrice() > 0     ? String.valueOf(a.getPurchasePrice())      : "");
-        tfWarranty.setText(a.getWarrantyExpiry()     != null ? a.getWarrantyExpiry().toString()  : "");
+        tfPurchaseDate.setText(a.getPurchaseDate() != null
+                ? a.getPurchaseDate().toString() : "");
+        tfPrice.setText(a.getPurchasePrice() > 0
+                ? String.valueOf(a.getPurchasePrice()) : "");
+        tfWarranty.setText(a.getWarrantyExpiry() != null
+                ? a.getWarrantyExpiry().toString() : "");
         taNotes.setText(a.getNotes());
     }
 
     private Asset buildAsset(Asset base) {
         Asset a = base != null ? base : new Asset();
         a.setName(tfName.getText().trim());
-        a.setCategory(cbCategory.getValue());
+        a.setCategoryStr(cbCategory.getValue() != null ? cbCategory.getValue() : "");
         a.setManufacturer(tfManufacturer.getText().trim());
         a.setModel(tfModel.getText().trim());
         a.setSerialNumber(tfSerial.getText().trim());
         a.setAssetTag(tfAssetTag.getText().trim().toUpperCase());
-        a.setStatus(cbStatus.getValue());
+        a.setStatusStr(cbStatus.getValue() != null ? cbStatus.getValue() : "");
         a.setAssignedTo(tfAssignedTo.getText().trim());
         a.setLocation(tfLocation.getText().trim());
         a.setPurchaseDate(parseDate(tfPurchaseDate.getText()));
@@ -219,7 +217,7 @@ public class AssetDialog extends Dialog<Asset> {
         return a;
     }
 
-    // ── Factories / helpers ───────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Label label(String text) {
         Label l = new Label(text);

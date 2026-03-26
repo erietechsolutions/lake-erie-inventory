@@ -32,7 +32,7 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 
 ## Features
 
-- Colour-coded asset table with sortable columns
+- Color-coded asset table with sortable columns
 - Live search + category/status filter dropdowns
 - Add / Edit / Delete assets via polished dialog
 - Sidebar quick-filters (Active, In Repair, Expired Warranty, etc.)
@@ -54,5 +54,6 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 
 ## Requirements
 
+- Java JDK 17+ — https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html
 - Java JDK 17+ — https://adoptium.net
-- JavaFX SDK 17+ — https://gluonhq.com/products/javafx/
+- JavaFX SDK 17+ — https://gluonhq.com/products/javafx/ (Recommended Version - 21.0.10)

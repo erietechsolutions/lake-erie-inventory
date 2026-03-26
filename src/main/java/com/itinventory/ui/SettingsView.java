@@ -306,24 +306,42 @@ public class SettingsView extends Stage {
             showError("Please enter a valid hex color (e.g. #4f7cff).");
             return;
         }
-        // Validate shared path if provided
-        if (!dataPath.isBlank() && !java.nio.file.Files.isDirectory(java.nio.file.Paths.get(dataPath))) {
+        if (!dataPath.isBlank() &&
+                !java.nio.file.Files.isDirectory(java.nio.file.Paths.get(dataPath))) {
             showError("Shared data path does not exist or is not a folder.");
             return;
         }
 
+        // Set shared properties first
         config.setOrgName(name);
         config.setOrgType(type != null ? type : "");
         config.setAdminName(admin);
         config.setAccentColor(color);
-        config.setDataPath(dataPath);
         config.setResetAllowed(cbAllowReset.isSelected());
 
         try {
-            config.save();
+            // setDataPath also migrates the shared config file if path changes
+            config.setDataPath(dataPath);
+            // Save shared config to the (possibly new) shared location
+            config.saveShared();
+            // Save local config (path preference stays on this machine)
+            config.saveLocal();
+
             if (onSaved != null) onSaved.run();
+
+            // Show restart notice only if the data path actually changed
+            if (!dataPath.equals(
+                    java.nio.file.Paths.get(config.getDataPath()).toString())) {
+                javafx.scene.control.Alert info = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.INFORMATION,
+                    "Shared data path updated. Please restart the app for the change to take effect.",
+                    javafx.scene.control.ButtonType.OK);
+                info.setTitle("Restart Required");
+                info.initOwner(this);
+                info.showAndWait();
+            }
             close();
-        } catch (IOException e) {
+        } catch (java.io.IOException e) {
             showError("Could not save settings: " + e.getMessage());
         }
     }
@@ -388,7 +406,8 @@ public class SettingsView extends Stage {
         confirm.showAndWait().ifPresent(btn -> {
             if (btn != ButtonType.OK) return;
             try {
-                Files.deleteIfExists(Paths.get(OrgConfig.CONFIG_FILE));
+                // Delete shared config only — license acceptance stays local
+                Files.deleteIfExists(config.getSharedConfigPath());
                 Alert done = new Alert(Alert.AlertType.INFORMATION,
                     "Settings have been reset. The setup wizard will run on next launch.",
                     ButtonType.OK);

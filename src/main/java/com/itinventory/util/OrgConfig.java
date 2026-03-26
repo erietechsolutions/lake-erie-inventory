@@ -5,118 +5,199 @@ import java.nio.file.*;
 import java.util.Properties;
 
 /**
- * Loads and saves organization configuration to data/org.properties.
- * This file stays LOCAL to each machine (not on the shared drive).
+ * Manages two separate configuration files:
  *
- * Fields stored:
- *   org.name             - organization name
- *   org.type             - School | Company | Non-Profit | Library | Government | Other
- *   org.adminName        - IT contact / admin name
- *   org.accentColor      - hex color string, e.g. #4f7cff
- *   org.configured       - "true" once setup wizard has been completed
- *   org.licenseAccepted  - "true" once the user has accepted the license agreement
- *   org.allowReset       - "true" if database/settings reset is enabled (default: false)
- *   org.sharedDataPath   - path to shared data folder (blank = use local data/)
+ * 1. LOCAL config  (data/org.local.properties) — stays on this machine only.
+ *    Stores: licenseAccepted, sharedDataPath
+ *
+ * 2. SHARED config ({dataDir}/org.properties) — lives in the shared data folder.
+ *    Stores: orgName, orgType, adminName, accentColor, configured, allowReset
+ *
+ * When no shared path is set, both files live in the local data/ folder and
+ * the app behaves exactly as before. When a shared path is configured, the
+ * shared config is read from and written to the network folder so all machines
+ * see the same organization settings.
  */
 public class OrgConfig {
 
-    // Config file stays local - one per machine
-    public static final String CONFIG_FILE = "data/org.properties";
+    // ── File paths ────────────────────────────────────────────────────────────
 
-    public static final String KEY_NAME             = "org.name";
-    public static final String KEY_TYPE             = "org.type";
-    public static final String KEY_ADMIN            = "org.adminName";
-    public static final String KEY_COLOR            = "org.accentColor";
-    public static final String KEY_CONFIGURED       = "org.configured";
+    /** Always local — never on the share. */
+    public static final String LOCAL_CONFIG_FILE  = "data/org.local.properties";
+
+    /** Filename used inside whatever dataDir is active (local or shared). */
+    public static final String SHARED_CONFIG_NAME = "org.properties";
+
+    // ── Local-only keys ───────────────────────────────────────────────────────
     public static final String KEY_LICENSE_ACCEPTED = "org.licenseAccepted";
-    public static final String KEY_ALLOW_RESET      = "org.allowReset";
     public static final String KEY_SHARED_DATA_PATH = "org.sharedDataPath";
 
-    public static final String DEFAULT_COLOR = "#4f7cff";
+    // ── Shared keys ───────────────────────────────────────────────────────────
+    public static final String KEY_NAME        = "org.name";
+    public static final String KEY_TYPE        = "org.type";
+    public static final String KEY_ADMIN       = "org.adminName";
+    public static final String KEY_COLOR       = "org.accentColor";
+    public static final String KEY_CONFIGURED  = "org.configured";
+    public static final String KEY_ALLOW_RESET = "org.allowReset";
 
-    private final Properties props = new Properties();
-    private final Path configPath;
+    public static final String DEFAULT_COLOR   = "#4f7cff";
+
+    // ── Properties objects ────────────────────────────────────────────────────
+
+    private final Properties localProps  = new Properties();
+    private final Properties sharedProps = new Properties();
+
+    private final Path localConfigPath;
+    private Path sharedConfigPath;
+
+    // ── Constructor ───────────────────────────────────────────────────────────
 
     public OrgConfig() {
-        this.configPath = Paths.get(CONFIG_FILE);
-        load();
+        this.localConfigPath = Paths.get(LOCAL_CONFIG_FILE);
+        loadLocal();
+        resolveSharedPath();
+        loadShared();
     }
 
-    private void load() {
-        if (!Files.exists(configPath)) return;
-        try (InputStream in = Files.newInputStream(configPath)) {
-            props.load(in);
+    // ── Load ──────────────────────────────────────────────────────────────────
+
+    private void loadLocal() {
+        if (!Files.exists(localConfigPath)) return;
+        try (InputStream in = Files.newInputStream(localConfigPath)) {
+            localProps.load(in);
         } catch (IOException e) {
-            System.err.println("Could not load org config: " + e.getMessage());
+            System.err.println("Could not load local config: " + e.getMessage());
         }
     }
 
+    private void resolveSharedPath() {
+        String shared = localProps.getProperty(KEY_SHARED_DATA_PATH, "").trim();
+        String dir    = shared.isBlank() ? "data" : shared;
+        this.sharedConfigPath = Paths.get(dir, SHARED_CONFIG_NAME);
+    }
+
+    private void loadShared() {
+        if (!Files.exists(sharedConfigPath)) return;
+        try (InputStream in = Files.newInputStream(sharedConfigPath)) {
+            sharedProps.load(in);
+        } catch (IOException e) {
+            System.err.println("Could not load shared config: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Reloads both config files from disk.
+     * Call after saving to ensure the in-memory state is current.
+     */
+    public void reload() {
+        localProps.clear();
+        sharedProps.clear();
+        loadLocal();
+        resolveSharedPath();
+        loadShared();
+    }
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
+    /** Saves the local config (license, shared path). */
+    public void saveLocal() throws IOException {
+        Files.createDirectories(localConfigPath.getParent());
+        try (OutputStream out = Files.newOutputStream(localConfigPath)) {
+            localProps.store(out,
+                "Lake Erie Inventory - Local Configuration (do not copy to other machines)");
+        }
+    }
+
+    /** Saves the shared config (org info) to the active data directory. */
+    public void saveShared() throws IOException {
+        Files.createDirectories(sharedConfigPath.getParent());
+        try (OutputStream out = Files.newOutputStream(sharedConfigPath)) {
+            sharedProps.store(out,
+                "Lake Erie Inventory - Shared Organization Configuration");
+        }
+    }
+
+    /** Saves both configs. */
     public void save() throws IOException {
-        Files.createDirectories(configPath.getParent());
-        try (OutputStream out = Files.newOutputStream(configPath)) {
-            props.store(out, "Lake Erie Inventory - Organization Configuration (local)");
-        }
+        saveLocal();
+        saveShared();
     }
 
-    // ── License ───────────────────────────────────────────────────────────────
+    // ── Local accessors ───────────────────────────────────────────────────────
 
     public boolean isLicenseAccepted() {
-        return "true".equalsIgnoreCase(props.getProperty(KEY_LICENSE_ACCEPTED, "false"));
+        return "true".equalsIgnoreCase(
+                localProps.getProperty(KEY_LICENSE_ACCEPTED, "false"));
     }
 
     public void setLicenseAccepted(boolean v) {
-        props.setProperty(KEY_LICENSE_ACCEPTED, v ? "true" : "false");
+        localProps.setProperty(KEY_LICENSE_ACCEPTED, v ? "true" : "false");
     }
 
-    // ── Setup ─────────────────────────────────────────────────────────────────
-
-    public boolean isConfigured() {
-        return "true".equalsIgnoreCase(props.getProperty(KEY_CONFIGURED, "false"));
-    }
-
-    public void markConfigured() {
-        props.setProperty(KEY_CONFIGURED, "true");
-    }
-
-    // ── Org details ───────────────────────────────────────────────────────────
-
-    public String getOrgName()     { return props.getProperty(KEY_NAME,  ""); }
-    public String getOrgType()     { return props.getProperty(KEY_TYPE,  ""); }
-    public String getAdminName()   { return props.getProperty(KEY_ADMIN, ""); }
-    public String getAccentColor() { return props.getProperty(KEY_COLOR, DEFAULT_COLOR); }
-
-    public void setOrgName(String v)     { props.setProperty(KEY_NAME,  v); }
-    public void setOrgType(String v)     { props.setProperty(KEY_TYPE,  v); }
-    public void setAdminName(String v)   { props.setProperty(KEY_ADMIN, v); }
-    public void setAccentColor(String v) { props.setProperty(KEY_COLOR, v); }
-
-    // ── Shared data path ──────────────────────────────────────────────────────
-
-    /**
-     * Returns the path to the shared data directory.
-     * Returns "data" (local) if no shared path has been configured.
-     */
     public String getDataPath() {
-        String shared = props.getProperty(KEY_SHARED_DATA_PATH, "").trim();
+        String shared = localProps.getProperty(KEY_SHARED_DATA_PATH, "").trim();
         return shared.isBlank() ? "data" : shared;
     }
 
-    public void setDataPath(String v) {
-        props.setProperty(KEY_SHARED_DATA_PATH, v == null ? "" : v.trim());
+    public void setDataPath(String v) throws IOException {
+        String newPath = (v == null ? "" : v.trim());
+        localProps.setProperty(KEY_SHARED_DATA_PATH, newPath);
+        // Re-resolve shared config path so subsequent saves go to the right place
+        resolveSharedPath();
+
+        // If switching to a new shared path, migrate existing shared config there
+        if (!newPath.isBlank()) {
+            Path newSharedConfig = Paths.get(newPath, SHARED_CONFIG_NAME);
+            if (!Files.exists(newSharedConfig) && !sharedProps.isEmpty()) {
+                Files.createDirectories(Paths.get(newPath));
+                try (OutputStream out = Files.newOutputStream(newSharedConfig)) {
+                    sharedProps.store(out,
+                        "Lake Erie Inventory - Shared Organization Configuration");
+                }
+            }
+            // Reload from the new location
+            sharedConfigPath = newSharedConfig;
+            loadShared();
+        }
     }
 
     public boolean isUsingSharedPath() {
-        String shared = props.getProperty(KEY_SHARED_DATA_PATH, "").trim();
+        String shared = localProps.getProperty(KEY_SHARED_DATA_PATH, "").trim();
         return !shared.isBlank();
     }
 
-    // ── Reset ─────────────────────────────────────────────────────────────────
+    // ── Shared accessors ──────────────────────────────────────────────────────
+
+    public boolean isConfigured() {
+        return "true".equalsIgnoreCase(
+                sharedProps.getProperty(KEY_CONFIGURED, "false"));
+    }
+
+    public void markConfigured() {
+        sharedProps.setProperty(KEY_CONFIGURED, "true");
+    }
+
+    public String getOrgName()     { return sharedProps.getProperty(KEY_NAME,  ""); }
+    public String getOrgType()     { return sharedProps.getProperty(KEY_TYPE,  ""); }
+    public String getAdminName()   { return sharedProps.getProperty(KEY_ADMIN, ""); }
+    public String getAccentColor() { return sharedProps.getProperty(KEY_COLOR, DEFAULT_COLOR); }
+
+    public void setOrgName(String v)     { sharedProps.setProperty(KEY_NAME,  v); }
+    public void setOrgType(String v)     { sharedProps.setProperty(KEY_TYPE,  v); }
+    public void setAdminName(String v)   { sharedProps.setProperty(KEY_ADMIN, v); }
+    public void setAccentColor(String v) { sharedProps.setProperty(KEY_COLOR, v); }
 
     public boolean isResetAllowed() {
-        return "true".equalsIgnoreCase(props.getProperty(KEY_ALLOW_RESET, "false"));
+        return "true".equalsIgnoreCase(
+                sharedProps.getProperty(KEY_ALLOW_RESET, "false"));
     }
 
     public void setResetAllowed(boolean v) {
-        props.setProperty(KEY_ALLOW_RESET, v ? "true" : "false");
+        sharedProps.setProperty(KEY_ALLOW_RESET, v ? "true" : "false");
     }
+
+    // ── Path helpers ──────────────────────────────────────────────────────────
+
+    public Path getSharedConfigPath() { return sharedConfigPath; }
+    public Path getLocalConfigPath()  { return localConfigPath; }
 }

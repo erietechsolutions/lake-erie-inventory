@@ -5,6 +5,8 @@ import com.itinventory.model.Asset.Category;
 import com.itinventory.model.Asset.Status;
 import com.itinventory.model.UserAccount;
 import com.itinventory.service.InventoryService;
+import com.itinventory.util.ChangeLogger;
+import com.itinventory.util.CustomFieldsManager;
 import com.itinventory.util.OrgConfig;
 import com.itinventory.util.UpdateChecker;
 import com.itinventory.util.UserManager;
@@ -30,14 +32,16 @@ import java.util.concurrent.Executors;
  */
 public class MainView {
 
-    private final Stage             stage;
-    private final InventoryService  service;
-    private final OrgConfig         config;
-    private final UserManager       userManager;
-    private final boolean           readOnly;
-    private final BorderPane        root;
-    private OrgBanner               orgBanner;
-    private final ExecutorService   executor = Executors.newSingleThreadExecutor(r -> {
+    private final Stage              stage;
+    private final InventoryService   service;
+    private final OrgConfig          config;
+    private final UserManager        userManager;
+    private final CustomFieldsManager customFields;
+    private final ChangeLogger        changeLogger;
+    private final boolean            readOnly;
+    private final BorderPane         root;
+    private OrgBanner                orgBanner;
+    private final ExecutorService    executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "update-check-bg");
         t.setDaemon(true);
         return t;
@@ -57,13 +61,16 @@ public class MainView {
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public MainView(Stage stage, InventoryService service, OrgConfig config,
-                    UserManager userManager, boolean readOnly) {
-        this.stage       = stage;
-        this.service     = service;
-        this.config      = config;
-        this.userManager = userManager;
-        this.readOnly    = readOnly;
-        this.root        = new BorderPane();
+                    UserManager userManager, CustomFieldsManager customFields,
+                    ChangeLogger changeLogger, boolean readOnly) {
+        this.stage        = stage;
+        this.service      = service;
+        this.config       = config;
+        this.userManager  = userManager;
+        this.customFields = customFields;
+        this.changeLogger = changeLogger;
+        this.readOnly     = readOnly;
+        this.root         = new BorderPane();
         root.getStyleClass().add("main-root");
 
         orgBanner = new OrgBanner(config, this::openSettings, this::openUpdateDialog);
@@ -198,11 +205,16 @@ public class MainView {
                 spacer, btnExport, btnReload
         );
 
-        // Admin-only: User Management shortcut
+        // Admin-only: User Management, Custom Fields, Change Log
         if (isAdmin()) {
             Button btnUsers = sidebarButton("👥  User Management",
                     () -> new UserManagementView(stage, userManager).showAndWait());
-            sidebar.getChildren().add(btnUsers);
+            Button btnFields = sidebarButton("🏷  Custom Fields",
+                    () -> new CustomFieldsView(stage, customFields,
+                            service, changeLogger).showAndWait());
+            Button btnLog = sidebarButton("📋  Change Log",
+                    () -> new ChangeLogView(stage, changeLogger).showAndWait());
+            sidebar.getChildren().addAll(btnUsers, btnFields, btnLog);
         }
 
         return sidebar;
@@ -236,7 +248,7 @@ public class MainView {
         categoryFilter.setPrefWidth(140);
         List<String> cats = new ArrayList<>();
         cats.add("All Categories");
-        Arrays.stream(Category.values()).map(Enum::name).forEach(cats::add);
+        cats.addAll(customFields.getActiveCategories());
         categoryFilter.setItems(FXCollections.observableArrayList(cats));
         categoryFilter.getSelectionModel().selectFirst();
         categoryFilter.setOnAction(e -> applyFilters());
@@ -247,7 +259,7 @@ public class MainView {
         statusFilter.setPrefWidth(130);
         List<String> statuses = new ArrayList<>();
         statuses.add("All Statuses");
-        Arrays.stream(Status.values()).map(Enum::name).forEach(statuses::add);
+        statuses.addAll(customFields.getActiveStatuses());
         statusFilter.setItems(FXCollections.observableArrayList(statuses));
         statusFilter.getSelectionModel().selectFirst();
         statusFilter.setOnAction(e -> applyFilters());
@@ -331,11 +343,12 @@ public class MainView {
                     || contains(a.getLocation(), search)
                     || contains(a.getAssetTag(), search);
 
+            // Use string-based comparison to support custom categories/statuses
             boolean matchCat = catSel == null || catSel.equals("All Categories")
-                    || (a.getCategory() != null && a.getCategory().name().equals(catSel));
+                    || catSel.equalsIgnoreCase(a.getCategoryStr());
 
             boolean matchStat = statSel == null || statSel.equals("All Statuses")
-                    || (a.getStatus() != null && a.getStatus().name().equals(statSel));
+                    || statSel.equalsIgnoreCase(a.getStatusStr());
 
             return matchSearch && matchCat && matchStat;
         });
@@ -373,10 +386,12 @@ public class MainView {
     // ── CRUD actions ──────────────────────────────────────────────────────────
 
     private void openAddDialog() {
-        AssetDialog dialog = new AssetDialog(stage, null, service);
+        AssetDialog dialog = new AssetDialog(stage, null, service, customFields, changeLogger);
         dialog.showAndWait().ifPresent(asset -> {
             try {
                 String id = service.addAsset(asset);
+                changeLogger.log(ChangeLogger.Action.ASSET_CREATED, id,
+                    "Asset created: " + asset.getName());
                 refreshTable();
                 updateStatus("Added asset " + id);
             } catch (IOException e) {
@@ -391,10 +406,28 @@ public class MainView {
             showInfo("No selection", "Please select an asset to edit.");
             return;
         }
-        AssetDialog dialog = new AssetDialog(stage, selected, service);
+        // Snapshot before values for change log
+        String beforeName   = selected.getName();
+        String beforeStatus = selected.getStatusStr();
+        String beforeCat    = selected.getCategoryStr();
+
+        AssetDialog dialog = new AssetDialog(stage, selected, service, customFields, changeLogger);
         dialog.showAndWait().ifPresent(updated -> {
             try {
                 service.updateAsset(updated);
+                // Build a concise change summary
+                StringBuilder detail = new StringBuilder("Asset updated");
+                if (!beforeName.equals(updated.getName()))
+                    detail.append("; name: ").append(beforeName)
+                          .append(" -> ").append(updated.getName());
+                if (!beforeStatus.equals(updated.getStatusStr()))
+                    detail.append("; status: ").append(beforeStatus)
+                          .append(" -> ").append(updated.getStatusStr());
+                if (!beforeCat.equals(updated.getCategoryStr()))
+                    detail.append("; category: ").append(beforeCat)
+                          .append(" -> ").append(updated.getCategoryStr());
+                changeLogger.log(ChangeLogger.Action.ASSET_UPDATED,
+                    updated.getAssetId(), detail.toString());
                 refreshTable();
                 updateStatus("Updated asset " + updated.getAssetId());
             } catch (IOException e) {
@@ -411,15 +444,20 @@ public class MainView {
         }
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Delete Asset");
-        confirm.setHeaderText("Delete " + selected.getAssetId() + " – " + selected.getName() + "?");
+        confirm.setHeaderText("Delete " + selected.getAssetId() +
+                " - " + selected.getName() + "?");
         confirm.setContentText("This action cannot be undone.");
         confirm.initOwner(stage);
         confirm.showAndWait().ifPresent(btn -> {
             if (btn == ButtonType.OK) {
                 try {
-                    service.deleteAsset(selected.getAssetId());
+                    String id   = selected.getAssetId();
+                    String name = selected.getName();
+                    service.deleteAsset(id);
+                    changeLogger.log(ChangeLogger.Action.ASSET_DELETED, id,
+                        "Asset deleted: " + name);
                     refreshTable();
-                    updateStatus("Deleted asset " + selected.getAssetId());
+                    updateStatus("Deleted asset " + id);
                 } catch (IOException e) {
                     showError("Failed to delete asset", e.getMessage());
                 }
