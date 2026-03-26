@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-# IT Asset Inventory Management System
+# Lake Erie Inventory | IT Asset Inventory Management System
 ### JavaFX GUI Edition
 
 A graphical Java desktop application for managing your IT asset inventory.
@@ -33,7 +33,7 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 
 ## Features
 
-- Colour-coded asset table with sortable columns
+- Color-coded asset table with sortable columns
 - Live search + category/status filter dropdowns
 - Add / Edit / Delete assets via polished dialog
 - Sidebar quick-filters (Active, In Repair, Expired Warranty, etc.)
