@@ -56,7 +56,7 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 ## Requirements
 
 - Java JDK 17+ — https://adoptium.net
-- JavaFX SDK 17+ — https://gluonhq.com/products/javafx/
+- JavaFX SDK 17+ — https://gluonhq.com/products/javafx/ (21.0.10 LTS Works Best)
 =======
 # opensource-it-inventory
 This is an open source IT inventory system
