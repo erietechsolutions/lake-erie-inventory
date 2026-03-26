@@ -60,4 +60,3 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 =======
 # opensource-it-inventory
 This is an open source IT inventory system
->>>>>>> 7b50847ed5a17295ae2ed0fab2bdd63a6a15be7b
