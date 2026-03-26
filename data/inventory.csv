@@ -1,9 +1,0 @@
-AssetID,Name,Category,Manufacturer,Model,SerialNumber,Status,AssignedTo,Location,PurchaseDate,PurchasePrice,WarrantyExpiry,Notes,AssetTag
-ASSET-0001,Dell Latitude 5540,LAPTOP,Dell,Latitude 5540,SN-DL5540-001,ACTIVE,Alice Johnson,Office 101,2023-03-10,1299.99,2026-03-09,Primary dev machine,
-ASSET-0002,HP EliteBook 840,LAPTOP,HP,EliteBook 840 G9,SN-HP840-002,ACTIVE,Bob Smith,Office 102,2022-11-01,1150.0,2025-10-31,Needs RAM upgrade,
-ASSET-0003,Dell PowerEdge R750,SERVER,Dell,PowerEdge R750,SN-PE750-003,ACTIVE,,Server Room A,2022-06-15,8500.0,2025-06-14,Primary web server,
-ASSET-0004,Cisco Catalyst 9300,NETWORK_DEVICE,Cisco,Catalyst 9300,SN-CS9300-004,ACTIVE,,Network Closet,2021-09-20,4200.0,2024-09-19,Core switch – warranty expired,
-ASSET-0006,HP LaserJet Pro,PRINTER,HP,LaserJet Pro M404dn,SN-HPLJ-006,INACTIVE,,Storage Room,2020-08-05,350.0,2023-08-04,Awaiting disposal,
-ASSET-0008,Microsoft Surface Pro 9,TABLET,Microsoft,Surface Pro 9,SN-MSSP9-008,ACTIVE,Dave Brown,Meeting Room B,2023-07-22,1599.0,2026-07-21,Shared device,
-ASSET-0009,Logitech MX Keys,PERIPHERAL,Logitech,MX Keys,SN-LGMXK-009,RETIRED,Bob Smith,Office 102,2023-01-15,99.99,2026-01-14,,
-ASSET-0010,Adobe Creative Cloud,SOFTWARE_LICENSE,Adobe,Creative Cloud,LIC-ACC-2024-010,ACTIVE,Carol White,N/A,2024-02-01,599.88,2025-01-31,Annual licence – renewal due,
