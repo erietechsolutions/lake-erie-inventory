@@ -32,7 +32,7 @@ public class UpdateChecker {
     // ── Version ───────────────────────────────────────────────────────────────
 
     /** The version of this build. Update this string with every release. */
-    public static final String CURRENT_VERSION = "v1.0.2";
+    public static final String CURRENT_VERSION = "v1.0.3";
 
     // ── GitHub config ─────────────────────────────────────────────────────────
 
