@@ -153,46 +153,73 @@ public class UserManager {
 
     /**
      * Checks if the inventory is currently locked by another active user.
-     * Returns the lock info string if locked, or null if free/stale.
+     * Returns the lock info string if locked by someone else, or null if free/stale.
+     *
+     * IMPORTANT: On IOException we treat the lock as HELD rather than free.
+     * This prevents a network glitch from accidentally granting edit access.
      */
     public String checkLock() {
         if (!Files.exists(lockFile)) return null;
 
+        String content;
         try {
-            String content = Files.readString(lockFile, StandardCharsets.UTF_8).trim();
-            if (content.isBlank()) return null;
+            content = Files.readString(lockFile, StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            // Cannot read the lock file - treat as locked to be safe
+            LOG.warning("Could not read lock file - treating as locked: " + e.getMessage());
+            return "unknown|unknown|unknown|" +
+                    LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        }
 
-            // Check if lock is stale
+        if (content.isBlank()) return null;
+
+        // Check if the lock belongs to the current user on this machine
+        // If so, it's a leftover from a previous session - clear it and proceed
+        if (currentUser != null) {
             String[] parts = content.split("\\|");
-            if (parts.length >= 4) {
-                try {
-                    LocalDateTime lockTime = LocalDateTime.parse(parts[3],
-                            DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-                    long ageMs = java.time.Duration.between(lockTime,
-                            LocalDateTime.now()).toMillis();
-                    if (ageMs > LOCK_TIMEOUT_MS) {
-                        // Stale lock - remove it
+            String lockUser = parts.length > 0 ? parts[0] : "";
+            String lockHost = parts.length > 2 ? parts[2] : "";
+            if (lockUser.equalsIgnoreCase(currentUser.getUsername())
+                    && lockHost.equalsIgnoreCase(getHostname())) {
+                LOG.info("Found own stale lock - clearing it.");
+                try { Files.deleteIfExists(lockFile); } catch (IOException ignored) {}
+                return null;
+            }
+        }
+
+        // Check if lock is stale (older than timeout)
+        String[] parts = content.split("\\|");
+        if (parts.length >= 4) {
+            try {
+                LocalDateTime lockTime = LocalDateTime.parse(parts[3],
+                        DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                long ageMs = java.time.Duration.between(lockTime,
+                        LocalDateTime.now()).toMillis();
+                if (ageMs > LOCK_TIMEOUT_MS) {
+                    try {
                         Files.deleteIfExists(lockFile);
-                        LOG.info("Removed stale lock file (age: " + ageMs + "ms)");
-                        return null;
+                        LOG.info("Removed stale lock (age: " + ageMs + "ms)");
+                    } catch (IOException e) {
+                        LOG.warning("Could not remove stale lock: " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    // Can't parse timestamp - treat as stale
-                    Files.deleteIfExists(lockFile);
                     return null;
                 }
+            } catch (Exception e) {
+                // Cannot parse timestamp - treat as stale
+                try { Files.deleteIfExists(lockFile); }
+                catch (IOException ignored) {}
+                return null;
             }
-            return content; // active lock
-
-        } catch (IOException e) {
-            LOG.warning("Could not read lock file: " + e.getMessage());
-            return null;
         }
+
+        return content; // active lock held by someone else
     }
 
     /**
      * Acquires the lock for the current user.
-     * Should only be called for ADMIN or READ_WRITE users.
+     * Verifies the lock was actually written before returning.
+     * Throws IOException if the lock cannot be written — caller should
+     * treat this as a failure and not grant edit access.
      */
     public void acquireLock() throws IOException {
         if (currentUser == null) return;
@@ -201,11 +228,20 @@ public class UserManager {
                           currentUser.getUsername() + "|" +
                           hostname + "|" +
                           LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
+        Files.createDirectories(lockFile.getParent());
         Files.writeString(lockFile, content, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        LOG.info("Lock acquired by " + currentUser.getUsername() + " on " + hostname);
 
-        // Start refresh timer to keep lock alive
+        // Verify the lock was actually written correctly
+        String verify = Files.readString(lockFile, StandardCharsets.UTF_8).trim();
+        if (!verify.startsWith(currentUser.getUsername())) {
+            throw new IOException(
+                "Lock file verification failed - another user may have acquired it simultaneously.");
+        }
+
+        LOG.info("Lock acquired by " + currentUser.getUsername() +
+                 " on " + hostname + " at " + lockFile.toAbsolutePath());
         startLockRefresh();
     }
 

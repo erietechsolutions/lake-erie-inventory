@@ -9,6 +9,7 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.logging.Logger;
 
 public class App extends Application {
 
@@ -16,6 +17,8 @@ public class App extends Application {
     public static final String VERSION    = "v1.0.4";
     public static final String COPYRIGHT  =
         "\u00A9 Lake Erie Technical Solutions LLC  \u2014  All Rights Reserved 2026";
+
+    private static final Logger LOG = Logger.getLogger(App.class.getName());
 
     private static InventoryService    service;
     private static UserManager         userManager;
@@ -86,6 +89,7 @@ public class App extends Application {
         if (userManager.getCurrentUser().canEdit()) {
             String existingLock = userManager.checkLock();
             if (existingLock != null) {
+                // Someone else has the lock - read only
                 readOnly = true;
                 javafx.scene.control.Alert lockAlert =
                     new javafx.scene.control.Alert(
@@ -97,9 +101,27 @@ public class App extends Application {
                     "You can still view and export data.");
                 lockAlert.showAndWait();
             } else {
-                userManager.acquireLock();
-                changeLogger.log(ChangeLogger.Action.LOCK_ACQUIRED,
-                    dataDir, "Lock acquired");
+                // Try to acquire the lock - if it fails force read-only
+                try {
+                    userManager.acquireLock();
+                    changeLogger.log(ChangeLogger.Action.LOCK_ACQUIRED,
+                        dataDir, "Lock acquired");
+                } catch (IOException e) {
+                    readOnly = true;
+                    LOG.warning("Could not acquire lock: " + e.getMessage());
+                    javafx.scene.control.Alert lockFail =
+                        new javafx.scene.control.Alert(
+                            javafx.scene.control.Alert.AlertType.WARNING);
+                    lockFail.setTitle("Read-Only Mode");
+                    lockFail.setHeaderText("Could not acquire edit lock");
+                    lockFail.setContentText(
+                        "The inventory lock could not be written to the shared folder.\n\n" +
+                        "This usually means another user just opened the inventory or\n" +
+                        "there is a permissions issue with the share.\n\n" +
+                        "You have been placed in read-only mode. " +
+                        "Close and reopen the app to try again.");
+                    lockFail.showAndWait();
+                }
             }
         }
 
