@@ -2,30 +2,34 @@ package com.itinventory.ui;
 
 import com.itinventory.service.InventoryService;
 import com.itinventory.util.OrgConfig;
+import com.itinventory.util.UserManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
 /**
- * Settings window - lets the user update organization info at any time.
- * Also contains the database reset and settings reset options,
- * which are only accessible when "Allow Reset" is enabled.
+ * Settings window - Admin only.
+ * Covers organization info, shared data path, user management shortcut,
+ * and the optional danger zone resets.
  */
 public class SettingsView extends Stage {
 
-    private final OrgConfig         config;
-    private final InventoryService  service;
-    private final Runnable          onSaved;
-    private final Runnable          onDatabaseReset;
+    private final OrgConfig        config;
+    private final InventoryService service;
+    private final UserManager      userManager;
+    private final Runnable         onSaved;
+    private final Runnable         onDatabaseReset;
 
     // Form fields
     private final TextField        tfOrgName    = styledField();
@@ -33,10 +37,10 @@ public class SettingsView extends Stage {
     private final TextField        tfAdmin      = styledField();
     private final TextField        tfColor      = styledField();
     private final Label            colorPreview = new Label();
+    private final TextField        tfDataPath   = styledField();
     private final CheckBox         cbAllowReset = new CheckBox("Enable database and settings reset options");
     private final Label            errorLabel   = new Label();
 
-    // Reset buttons - shown only when allow reset is on
     private Button btnResetDatabase;
     private Button btnResetSettings;
     private VBox   resetSection;
@@ -44,9 +48,10 @@ public class SettingsView extends Stage {
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public SettingsView(Stage owner, OrgConfig config, InventoryService service,
-                        Runnable onSaved, Runnable onDatabaseReset) {
+                        UserManager userManager, Runnable onSaved, Runnable onDatabaseReset) {
         this.config          = config;
         this.service         = service;
+        this.userManager     = userManager;
         this.onSaved         = onSaved;
         this.onDatabaseReset = onDatabaseReset;
 
@@ -61,7 +66,7 @@ public class SettingsView extends Stage {
         root.setCenter(buildForm());
         root.setBottom(buildButtons());
 
-        Scene scene = new Scene(root, 480, 520);
+        Scene scene = new Scene(root, 520, 600);
         scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
         setScene(scene);
 
@@ -78,7 +83,7 @@ public class SettingsView extends Stage {
 
         Label title = new Label("  Organization Settings");
         title.getStyleClass().add("wizard-title");
-        Label sub = new Label("Changes are saved immediately and reflected in the app");
+        Label sub = new Label("Admin only — changes apply immediately");
         sub.getStyleClass().add("wizard-subtitle");
 
         header.getChildren().addAll(title, sub);
@@ -93,6 +98,7 @@ public class SettingsView extends Stage {
         cbOrgType.setMaxWidth(Double.MAX_VALUE);
         cbOrgType.getStyleClass().add("filter-combo");
 
+        // Color preview
         colorPreview.setPrefSize(22, 22);
         colorPreview.setMinSize(22, 22);
         colorPreview.getStyleClass().add("color-swatch-preview");
@@ -102,8 +108,49 @@ public class SettingsView extends Stage {
         colorRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(tfColor, Priority.ALWAYS);
 
-        errorLabel.getStyleClass().add("wizard-error");
-        errorLabel.setVisible(false);
+        // ── Shared data path ──────────────────────────────────────────────────
+        tfDataPath.setPromptText("Leave blank to use local data/ folder");
+
+        Button btnBrowse = new Button("Browse...");
+        btnBrowse.getStyleClass().add("btn-secondary");
+        btnBrowse.setOnAction(e -> {
+            DirectoryChooser dc = new DirectoryChooser();
+            dc.setTitle("Select Shared Data Folder");
+            if (!tfDataPath.getText().isBlank()) {
+                File current = new File(tfDataPath.getText().trim());
+                if (current.exists()) dc.setInitialDirectory(current);
+            }
+            File chosen = dc.showDialog(this);
+            if (chosen != null) tfDataPath.setText(chosen.getAbsolutePath());
+        });
+
+        HBox pathRow = new HBox(8, tfDataPath, btnBrowse);
+        pathRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(tfDataPath, Priority.ALWAYS);
+
+        Label pathNote = new Label(
+            "Set a shared network folder (e.g. \\\\server\\inventory) so multiple users\n" +
+            "can access the same inventory data. Requires app restart to take effect.");
+        pathNote.getStyleClass().add("wizard-page-body");
+        pathNote.setWrapText(true);
+
+        VBox pathBox = new VBox(6, pathRow, pathNote);
+        pathBox.getStyleClass().add("settings-section");
+        pathBox.setPadding(new Insets(10, 12, 10, 12));
+
+        // ── User Management shortcut ──────────────────────────────────────────
+        Button btnUsers = new Button("Open User Management");
+        btnUsers.getStyleClass().add("btn-secondary");
+        btnUsers.setMaxWidth(Double.MAX_VALUE);
+        btnUsers.setOnAction(e ->
+            new UserManagementView(this, userManager).showAndWait());
+
+        Label usersNote = new Label("Add, edit, or remove user accounts and roles.");
+        usersNote.getStyleClass().add("wizard-page-body");
+
+        VBox usersBox = new VBox(6, btnUsers, usersNote);
+        usersBox.getStyleClass().add("settings-section");
+        usersBox.setPadding(new Insets(10, 12, 10, 12));
 
         // ── Allow Reset toggle ────────────────────────────────────────────────
         cbAllowReset.getStyleClass().add("settings-checkbox");
@@ -122,8 +169,10 @@ public class SettingsView extends Stage {
         resetToggleBox.getStyleClass().add("settings-section");
         resetToggleBox.setPadding(new Insets(10, 12, 10, 12));
 
-        // ── Danger Zone ───────────────────────────────────────────────────────
         resetSection = buildResetSection();
+
+        errorLabel.getStyleClass().add("wizard-error");
+        errorLabel.setVisible(false);
 
         form.getChildren().addAll(
             formRow("Organization Name", tfOrgName),
@@ -132,7 +181,13 @@ public class SettingsView extends Stage {
             formRow("Accent Color (hex)", colorRow),
             errorLabel,
             new Separator(),
-            new Label("") {{ getStyleClass().add("settings-section-header"); setText("Reset Options"); }},
+            sectionHeader("Shared Data Path"),
+            pathBox,
+            new Separator(),
+            sectionHeader("User Accounts"),
+            usersBox,
+            new Separator(),
+            sectionHeader("Reset Options"),
             resetToggleBox,
             resetSection
         );
@@ -226,6 +281,7 @@ public class SettingsView extends Stage {
         tfAdmin.setText(config.getAdminName());
         tfColor.setText(config.getAccentColor());
         updateColorPreview(config.getAccentColor());
+        tfDataPath.setText(config.isUsingSharedPath() ? config.getDataPath() : "");
         cbAllowReset.setSelected(config.isResetAllowed());
     }
 
@@ -236,10 +292,11 @@ public class SettingsView extends Stage {
     }
 
     private void save() {
-        String name  = tfOrgName.getText().trim();
-        String type  = cbOrgType.getValue();
-        String admin = tfAdmin.getText().trim();
-        String color = tfColor.getText().trim();
+        String name     = tfOrgName.getText().trim();
+        String type     = cbOrgType.getValue();
+        String admin    = tfAdmin.getText().trim();
+        String color    = tfColor.getText().trim();
+        String dataPath = tfDataPath.getText().trim();
 
         if (name.isBlank()) {
             showError("Organization name cannot be empty.");
@@ -249,11 +306,17 @@ public class SettingsView extends Stage {
             showError("Please enter a valid hex color (e.g. #4f7cff).");
             return;
         }
+        // Validate shared path if provided
+        if (!dataPath.isBlank() && !java.nio.file.Files.isDirectory(java.nio.file.Paths.get(dataPath))) {
+            showError("Shared data path does not exist or is not a folder.");
+            return;
+        }
 
         config.setOrgName(name);
         config.setOrgType(type != null ? type : "");
         config.setAdminName(admin);
         config.setAccentColor(color);
+        config.setDataPath(dataPath);
         config.setResetAllowed(cbAllowReset.isSelected());
 
         try {
@@ -266,14 +329,13 @@ public class SettingsView extends Stage {
     }
 
     private void confirmResetDatabase() {
-        // Two-step confirmation for destructive action
         Alert step1 = new Alert(Alert.AlertType.WARNING);
         step1.initOwner(this);
         step1.setTitle("Reset Database");
         step1.setHeaderText("Are you sure you want to delete ALL inventory data?");
         step1.setContentText(
             "This will permanently delete every asset in your inventory.\n\n" +
-            "A backup will be saved to data/backups/ before deletion,\n" +
+            "A backup will be saved to the backups/ folder before deletion,\n" +
             "but this action cannot be undone from within the app.\n\n" +
             "Click OK to continue to final confirmation.");
         step1.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
@@ -281,7 +343,6 @@ public class SettingsView extends Stage {
         step1.showAndWait().ifPresent(btn -> {
             if (btn != ButtonType.OK) return;
 
-            // Second confirmation - must type CONFIRM
             TextInputDialog step2 = new TextInputDialog();
             step2.initOwner(this);
             step2.setTitle("Final Confirmation");
@@ -296,14 +357,13 @@ public class SettingsView extends Stage {
                     cancelled.showAndWait();
                     return;
                 }
-
                 try {
                     service.resetDatabase();
                     if (onDatabaseReset != null) onDatabaseReset.run();
                     close();
                     Alert done = new Alert(Alert.AlertType.INFORMATION,
-                        "Database reset successfully. All inventory data has been deleted.\n" +
-                        "A backup was saved to data/backups/", ButtonType.OK);
+                        "Database reset. All inventory data has been deleted.\n" +
+                        "A backup was saved to the backups/ folder.", ButtonType.OK);
                     done.setTitle("Database Reset");
                     done.showAndWait();
                 } catch (IOException e) {
@@ -320,14 +380,13 @@ public class SettingsView extends Stage {
         confirm.setHeaderText("Reset all organization settings?");
         confirm.setContentText(
             "This will clear your organization name, type, admin contact,\n" +
-            "and color settings. The setup wizard will run again on next launch.\n\n" +
-            "Your inventory data will NOT be affected.\n\n" +
+            "color, and shared path settings.\n\n" +
+            "Your inventory data and user accounts will NOT be affected.\n\n" +
             "This action cannot be undone.");
         confirm.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
 
         confirm.showAndWait().ifPresent(btn -> {
             if (btn != ButtonType.OK) return;
-
             try {
                 Files.deleteIfExists(Paths.get(OrgConfig.CONFIG_FILE));
                 Alert done = new Alert(Alert.AlertType.INFORMATION,
@@ -336,7 +395,6 @@ public class SettingsView extends Stage {
                 done.setTitle("Settings Reset");
                 done.showAndWait();
                 close();
-                // Re-run wizard immediately
                 OrgConfig fresh = new OrgConfig();
                 SetupWizard wizard = new SetupWizard(fresh);
                 wizard.showAndWait();
@@ -346,6 +404,8 @@ public class SettingsView extends Stage {
             }
         });
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void updateColorPreview(String hex) {
         try {
@@ -362,7 +422,11 @@ public class SettingsView extends Stage {
         errorLabel.setVisible(true);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    private Label sectionHeader(String text) {
+        Label lbl = new Label(text);
+        lbl.getStyleClass().add("settings-section-header");
+        return lbl;
+    }
 
     private VBox formRow(String labelText, javafx.scene.Node field) {
         Label lbl = new Label(labelText);

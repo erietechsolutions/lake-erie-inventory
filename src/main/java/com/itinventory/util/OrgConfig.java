@@ -6,6 +6,7 @@ import java.util.Properties;
 
 /**
  * Loads and saves organization configuration to data/org.properties.
+ * This file stays LOCAL to each machine (not on the shared drive).
  *
  * Fields stored:
  *   org.name             - organization name
@@ -15,9 +16,11 @@ import java.util.Properties;
  *   org.configured       - "true" once setup wizard has been completed
  *   org.licenseAccepted  - "true" once the user has accepted the license agreement
  *   org.allowReset       - "true" if database/settings reset is enabled (default: false)
+ *   org.sharedDataPath   - path to shared data folder (blank = use local data/)
  */
 public class OrgConfig {
 
+    // Config file stays local - one per machine
     public static final String CONFIG_FILE = "data/org.properties";
 
     public static final String KEY_NAME             = "org.name";
@@ -27,6 +30,7 @@ public class OrgConfig {
     public static final String KEY_CONFIGURED       = "org.configured";
     public static final String KEY_LICENSE_ACCEPTED = "org.licenseAccepted";
     public static final String KEY_ALLOW_RESET      = "org.allowReset";
+    public static final String KEY_SHARED_DATA_PATH = "org.sharedDataPath";
 
     public static final String DEFAULT_COLOR = "#4f7cff";
 
@@ -50,7 +54,7 @@ public class OrgConfig {
     public void save() throws IOException {
         Files.createDirectories(configPath.getParent());
         try (OutputStream out = Files.newOutputStream(configPath)) {
-            props.store(out, "Lake Erie Inventory - Organization Configuration");
+            props.store(out, "Lake Erie Inventory - Organization Configuration (local)");
         }
     }
 
@@ -85,6 +89,26 @@ public class OrgConfig {
     public void setOrgType(String v)     { props.setProperty(KEY_TYPE,  v); }
     public void setAdminName(String v)   { props.setProperty(KEY_ADMIN, v); }
     public void setAccentColor(String v) { props.setProperty(KEY_COLOR, v); }
+
+    // ── Shared data path ──────────────────────────────────────────────────────
+
+    /**
+     * Returns the path to the shared data directory.
+     * Returns "data" (local) if no shared path has been configured.
+     */
+    public String getDataPath() {
+        String shared = props.getProperty(KEY_SHARED_DATA_PATH, "").trim();
+        return shared.isBlank() ? "data" : shared;
+    }
+
+    public void setDataPath(String v) {
+        props.setProperty(KEY_SHARED_DATA_PATH, v == null ? "" : v.trim());
+    }
+
+    public boolean isUsingSharedPath() {
+        String shared = props.getProperty(KEY_SHARED_DATA_PATH, "").trim();
+        return !shared.isBlank();
+    }
 
     // ── Reset ─────────────────────────────────────────────────────────────────
 

@@ -3,9 +3,11 @@ package com.itinventory.ui;
 import com.itinventory.model.Asset;
 import com.itinventory.model.Asset.Category;
 import com.itinventory.model.Asset.Status;
+import com.itinventory.model.UserAccount;
 import com.itinventory.service.InventoryService;
 import com.itinventory.util.OrgConfig;
 import com.itinventory.util.UpdateChecker;
+import com.itinventory.util.UserManager;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -31,6 +33,8 @@ public class MainView {
     private final Stage             stage;
     private final InventoryService  service;
     private final OrgConfig         config;
+    private final UserManager       userManager;
+    private final boolean           readOnly;
     private final BorderPane        root;
     private OrgBanner               orgBanner;
     private final ExecutorService   executor = Executors.newSingleThreadExecutor(r -> {
@@ -52,14 +56,16 @@ public class MainView {
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public MainView(Stage stage, InventoryService service, OrgConfig config) {
-        this.stage   = stage;
-        this.service = service;
-        this.config  = config;
-        this.root    = new BorderPane();
+    public MainView(Stage stage, InventoryService service, OrgConfig config,
+                    UserManager userManager, boolean readOnly) {
+        this.stage       = stage;
+        this.service     = service;
+        this.config      = config;
+        this.userManager = userManager;
+        this.readOnly    = readOnly;
+        this.root        = new BorderPane();
         root.getStyleClass().add("main-root");
 
-        // Build the org banner + toolbar stacked in the top region
         orgBanner = new OrgBanner(config, this::openSettings, this::openUpdateDialog);
         VBox topRegion = new VBox(orgBanner, buildToolbar());
         root.setTop(topRegion);
@@ -67,11 +73,8 @@ public class MainView {
         root.setCenter(buildCenter());
         root.setBottom(buildStatusBar());
 
-        // Reflect org name in window title
         updateTitle();
         refreshTable();
-
-        // Silent background update check on startup - shows badge if update found
         runSilentUpdateCheck();
     }
 
@@ -79,15 +82,36 @@ public class MainView {
 
     private void updateTitle() {
         String name = config.getOrgName().isBlank() ? "Lake Erie Inventory" : config.getOrgName();
-        stage.setTitle(name + " - Lake Erie Inventory");
+        UserAccount user = userManager.getCurrentUser();
+        String userInfo  = user != null ? " [" + user.getUsername() + "]" : "";
+        String roLabel   = (readOnly || (user != null && user.isViewOnly())) ? " (Read Only)" : "";
+        stage.setTitle(name + " - Lake Erie Inventory" + userInfo + roLabel);
+    }
+
+    private boolean canEdit() {
+        if (readOnly) return false;
+        UserAccount u = userManager.getCurrentUser();
+        return u != null && u.canEdit();
+    }
+
+    private boolean isAdmin() {
+        UserAccount u = userManager.getCurrentUser();
+        return u != null && u.isAdmin();
     }
 
     private void openSettings() {
-        SettingsView sv = new SettingsView(stage, config, service, () -> {
+        if (!isAdmin()) {
+            Alert a = new Alert(Alert.AlertType.INFORMATION,
+                "Settings are only accessible to Admin users.", ButtonType.OK);
+            a.setTitle("Access Restricted");
+            a.initOwner(stage);
+            a.showAndWait();
+            return;
+        }
+        SettingsView sv = new SettingsView(stage, config, service, userManager, () -> {
             orgBanner.refresh(config);
             updateTitle();
         }, () -> {
-            // Called after a database reset - clear the table
             refreshTable();
             updateStatus("Database reset - all inventory data has been cleared.");
         });
@@ -130,27 +154,40 @@ public class MainView {
         appSub.getStyleClass().add("sidebar-subtitle");
         logoBox.getChildren().addAll(appTitle, appSub);
 
+        // Logged-in user badge
+        UserAccount user = userManager.getCurrentUser();
+        if (user != null) {
+            Label userLabel = new Label(user.getUsername());
+            userLabel.getStyleClass().add("sidebar-user-name");
+            Label roleLabel = new Label(user.getRole().displayName() +
+                    (readOnly ? " - Read Only" : ""));
+            roleLabel.getStyleClass().add("sidebar-user-role");
+            VBox userBox = new VBox(2, userLabel, roleLabel);
+            userBox.getStyleClass().add("sidebar-user-box");
+            userBox.setPadding(new Insets(8, 14, 8, 14));
+            logoBox.getChildren().add(userBox);
+        }
+
         // Nav buttons
-        Button btnAll        = sidebarButton("📋  All Assets",      () -> clearFilters());
-        Button btnActive     = sidebarButton("✅  Active",           () -> applyStatusFilter("ACTIVE"));
-        Button btnInRepair   = sidebarButton("🔧  In Repair",        () -> applyStatusFilter("IN_REPAIR"));
-        Button btnInactive   = sidebarButton("💤  Inactive",         () -> applyStatusFilter("INACTIVE"));
-        Button btnRetired    = sidebarButton("🗄  Retired",          () -> applyStatusFilter("RETIRED"));
-        Button btnMissing    = sidebarButton("❓  Missing",          () -> applyStatusFilter("MISSING"));
+        Button btnAll         = sidebarButton("📋  All Assets",      () -> clearFilters());
+        Button btnActive      = sidebarButton("✅  Active",           () -> applyStatusFilter("ACTIVE"));
+        Button btnInRepair    = sidebarButton("🔧  In Repair",        () -> applyStatusFilter("IN_REPAIR"));
+        Button btnInactive    = sidebarButton("💤  Inactive",         () -> applyStatusFilter("INACTIVE"));
+        Button btnRetired     = sidebarButton("🗄  Retired",          () -> applyStatusFilter("RETIRED"));
+        Button btnMissing     = sidebarButton("❓  Missing",          () -> applyStatusFilter("MISSING"));
 
         Separator sep1 = new Separator();
         sep1.getStyleClass().add("sidebar-sep");
 
-        Button btnWarranty   = sidebarButton("⚠️  Expired Warranty", () -> showExpiredWarranties());
+        Button btnWarranty    = sidebarButton("⚠️  Expired Warranty", () -> showExpiredWarranties());
         Button btnExpiringSoon = sidebarButton("⏰  Expiring Soon",   () -> showExpiringSoon());
 
         Separator sep2 = new Separator();
         sep2.getStyleClass().add("sidebar-sep");
 
-        Button btnExport     = sidebarButton("📤  Export CSV",       () -> exportCsv());
-        Button btnReload     = sidebarButton("🔄  Reload",           () -> reload());
+        Button btnExport = sidebarButton("📤  Export CSV", () -> exportCsv());
+        Button btnReload = sidebarButton("🔄  Reload",     () -> reload());
 
-        VBox.setVgrow(new Region(), Priority.ALWAYS);
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
@@ -160,6 +197,14 @@ public class MainView {
                 sep2, btnWarranty, btnExpiringSoon,
                 spacer, btnExport, btnReload
         );
+
+        // Admin-only: User Management shortcut
+        if (isAdmin()) {
+            Button btnUsers = sidebarButton("👥  User Management",
+                    () -> new UserManagementView(stage, userManager).showAndWait());
+            sidebar.getChildren().add(btnUsers);
+        }
+
         return sidebar;
     }
 
@@ -213,17 +258,28 @@ public class MainView {
         Button btnAdd = new Button("＋  Add Asset");
         btnAdd.getStyleClass().addAll("btn-primary");
         btnAdd.setOnAction(e -> openAddDialog());
+        btnAdd.setDisable(!canEdit());
 
         Button btnEdit = new Button("✏  Edit");
         btnEdit.getStyleClass().add("btn-secondary");
         btnEdit.setOnAction(e -> openEditDialog());
+        btnEdit.setDisable(!canEdit());
 
         Button btnDelete = new Button("🗑  Delete");
         btnDelete.getStyleClass().add("btn-danger");
         btnDelete.setOnAction(e -> deleteSelected());
+        btnDelete.setDisable(!canEdit());
 
-        toolbar.getChildren().addAll(searchField, categoryFilter, statusFilter,
-                spacer, btnAdd, btnEdit, btnDelete);
+        // Show read-only badge in toolbar if restricted
+        if (!canEdit()) {
+            Label roLabel = new Label("👁  View Only");
+            roLabel.getStyleClass().add("readonly-badge");
+            toolbar.getChildren().addAll(searchField, categoryFilter, statusFilter,
+                    spacer, roLabel, btnAdd, btnEdit, btnDelete);
+        } else {
+            toolbar.getChildren().addAll(searchField, categoryFilter, statusFilter,
+                    spacer, btnAdd, btnEdit, btnDelete);
+        }
         return toolbar;
     }
 
@@ -231,8 +287,9 @@ public class MainView {
 
     private StackPane buildCenter() {
         tableView = new AssetTableView(filteredList);
-        tableView.setOnDoubleClick(this::openEditDialog);
-
+        if (canEdit()) {
+            tableView.setOnDoubleClick(this::openEditDialog);
+        }
         StackPane center = new StackPane(tableView.getTableView());
         center.getStyleClass().add("table-container");
         return center;

@@ -642,3 +642,37 @@
     -fx-background-radius: 4;
     -fx-background-insets: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Login Screen
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar-user-box {
+    -fx-background-color: rgba(79, 124, 255, 0.08);
+    -fx-border-color: -color-border;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+    -fx-margin: 4 0 0 0;
+}
+
+.sidebar-user-name {
+    -fx-text-fill: -color-text;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.sidebar-user-role {
+    -fx-text-fill: -color-muted;
+    -fx-font-size: 10px;
+}
+
+/* ── Read-only badge in toolbar ─────────────────────────────── */
+.readonly-badge {
+    -fx-background-color: rgba(120, 128, 168, 0.18);
+    -fx-text-fill: #7880a8;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 4 12;
+    -fx-border-color: rgba(120, 128, 168, 0.35);
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+}
