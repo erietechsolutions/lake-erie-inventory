@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Lake Erie Inventory | IT Asset Inventory Management System
 ### JavaFX GUI Edition
 
