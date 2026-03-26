@@ -6,6 +6,7 @@ import java.io.*;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.NoSuchFileException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -155,17 +156,22 @@ public class UserManager {
      * Checks if the inventory is currently locked by another active user.
      * Returns the lock info string if locked by someone else, or null if free/stale.
      *
-     * IMPORTANT: On IOException we treat the lock as HELD rather than free.
-     * This prevents a network glitch from accidentally granting edit access.
+     * IMPORTANT: We do NOT use Files.exists() here because Windows SMB network
+     * shares cache directory listings and Files.exists() can return false even
+     * when the lock file is present on the share. Instead we attempt a direct
+     * read — if it throws FileNotFoundException the file genuinely doesn't exist,
+     * any other IOException is treated as locked to be safe.
      */
     public String checkLock() {
-        if (!Files.exists(lockFile)) return null;
-
         String content;
         try {
+            // Direct read bypasses Windows SMB directory cache
             content = Files.readString(lockFile, StandardCharsets.UTF_8).trim();
+        } catch (NoSuchFileException e) {
+            // File genuinely does not exist
+            return null;
         } catch (IOException e) {
-            // Cannot read the lock file - treat as locked to be safe
+            // Cannot read — treat as locked to prevent accidental concurrent edits
             LOG.warning("Could not read lock file - treating as locked: " + e.getMessage());
             return "unknown|unknown|unknown|" +
                     LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
@@ -174,7 +180,7 @@ public class UserManager {
         if (content.isBlank()) return null;
 
         // Check if the lock belongs to the current user on this machine
-        // If so, it's a leftover from a previous session - clear it and proceed
+        // If so it is a leftover from a previous session — clear it and proceed
         if (currentUser != null) {
             String[] parts = content.split("\\|");
             String lockUser = parts.length > 0 ? parts[0] : "";
@@ -205,7 +211,7 @@ public class UserManager {
                     return null;
                 }
             } catch (Exception e) {
-                // Cannot parse timestamp - treat as stale
+                // Cannot parse timestamp — treat as stale
                 try { Files.deleteIfExists(lockFile); }
                 catch (IOException ignored) {}
                 return null;
