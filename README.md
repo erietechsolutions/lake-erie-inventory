@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # Lake Erie Inventory | IT Asset Inventory Management System
+=======
+# IT Asset Inventory Management System
+>>>>>>> cdc8a9f (Release v1.0.1 - Updated copyright notice)
 ### JavaFX GUI Edition
 
 A graphical Java desktop application for managing your IT asset inventory.
@@ -56,7 +60,11 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 
 - Java JDK 17+ — https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html
 - Java JDK 17+ — https://adoptium.net
+<<<<<<< HEAD
 - JavaFX SDK 17+ — https://gluonhq.com/products/javafx/ (21.0.10 LTS Works Best)
 =======
 # opensource-it-inventory
 This is an open source IT inventory system
+=======
+- JavaFX SDK 17+ — https://gluonhq.com/products/javafx/
+>>>>>>> cdc8a9f (Release v1.0.1 - Updated copyright notice)

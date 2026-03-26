@@ -181,11 +181,10 @@ public class SettingsView extends Stage {
         return section;
     }
 
-    private HBox buildButtons() {
+    private VBox buildButtons() {
         HBox bar = new HBox(10);
-        bar.getStyleClass().add("wizard-footer");
         bar.setAlignment(Pos.CENTER_RIGHT);
-        bar.setPadding(new Insets(14, 28, 20, 28));
+        bar.setPadding(new Insets(14, 28, 8, 28));
 
         Button btnCancel = new Button("Cancel");
         btnCancel.getStyleClass().add("btn-secondary");
@@ -207,7 +206,16 @@ public class SettingsView extends Stage {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         bar.getChildren().addAll(btnWizard, spacer, btnCancel, btnSave);
-        return bar;
+
+        Label copyright = new Label(App.COPYRIGHT);
+        copyright.getStyleClass().add("copyright-label");
+        copyright.setMaxWidth(Double.MAX_VALUE);
+        copyright.setAlignment(Pos.CENTER);
+        copyright.setPadding(new Insets(0, 28, 10, 28));
+
+        VBox footer = new VBox(0, bar, copyright);
+        footer.getStyleClass().add("wizard-footer");
+        return footer;
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────

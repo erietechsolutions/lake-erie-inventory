@@ -248,7 +248,13 @@ public class MainView {
         statusLabel = new Label();
         statusLabel.getStyleClass().add("status-label");
 
-        bar.getChildren().add(statusLabel);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Label copyright = new Label(App.COPYRIGHT);
+        copyright.getStyleClass().add("copyright-label");
+
+        bar.getChildren().addAll(statusLabel, spacer, copyright);
         return bar;
     }
 
