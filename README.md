@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # IT Asset Inventory Management System
 ### JavaFX GUI Edition
 
@@ -56,3 +57,7 @@ Double-click `run.bat` — it compiles and launches the app automatically.
 
 - Java JDK 17+ — https://adoptium.net
 - JavaFX SDK 17+ — https://gluonhq.com/products/javafx/
+=======
+# opensource-it-inventory
+This is an open source IT inventory system
+>>>>>>> 7b50847ed5a17295ae2ed0fab2bdd63a6a15be7b
